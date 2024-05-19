@@ -14,7 +14,7 @@
 #define Trig_PIN            12
 #define Echo_PIN            13
 //蜂鸣器控制引脚
-#define Beep_PIN            11
+#define Beep_PIN            10
 // 循迹控制引脚
 #define LEFT_LINE_TRACJING      A0
 #define CENTER_LINE_TRACJING    A1
@@ -48,7 +48,7 @@ unsigned long previousMillis_Tracking_Beep = 0;
 int Left_Tra_Value;
 int Center_Tra_Value;
 int Right_Tra_Value;
-int Black_Line = 400;
+int Black_Line = 600;
 
 int leftDistance = 10;
 int middleDistance = 10;
@@ -57,7 +57,7 @@ int rightDistance = 10;
 byte RX_package[3] = {0};
 uint16_t angle = 0;
 byte order = Stop;
-char model_var = 1;
+int model_var = 1;
 int UT_distance = 0;
 
 void setup()
@@ -81,6 +81,8 @@ void setup()
     pinMode(CENTER_LINE_TRACJING, INPUT);
     pinMode(right_LINE_TRACJING, INPUT);
 
+    pinMode(Beep_PIN, OUTPUT);
+
     MOTORservo.write(angle);
 
     Motor(Stop, 0);
@@ -88,7 +90,7 @@ void setup()
 
 void loop()
 {
-    
+    digitalWrite(Beep_PIN, HIGH); // 停止鸣叫
     switch (model_var)
     {
       case 1:// Tracking model 巡线
@@ -100,60 +102,50 @@ void loop()
       case 3:// Counterclockwise spin motion 逆时针旋转
         model_var = Counterclockwise_spin_motion();
         break;
+      case 4://蜂鸣器模块
+        model_var = BeepModel(10);
+        break;
     }
-
-    
 }
 
-char Tracking()      // 循迹模组
+int Tracking()      // 循迹模组
 {
-    MOTORservo.write(90);
+  digitalWrite(Beep_PIN, HIGH); // 停止鸣叫
+  int judge = 1;
+  while(judge){
+    //MOTORservo.write(90);
     Left_Tra_Value = analogRead(LEFT_LINE_TRACJING);
     Center_Tra_Value = analogRead(CENTER_LINE_TRACJING);
     Right_Tra_Value = analogRead(right_LINE_TRACJING);
     if (Left_Tra_Value < Black_Line && Center_Tra_Value >= Black_Line && Right_Tra_Value < Black_Line)
     {
-        Motor(Forward, 250);
+        Motor(Forward, 250);//175
     }
     else if (Left_Tra_Value >= Black_Line && Center_Tra_Value >= Black_Line && Right_Tra_Value < Black_Line)
     {
-        Motor(Contrarotate, 220);
+        Motor(Contrarotate, 230);//165
     }
     else if (Left_Tra_Value >= Black_Line && Center_Tra_Value < Black_Line && Right_Tra_Value < Black_Line)
     {
-        Motor(Contrarotate, 250);
+        Motor(Contrarotate, 250);//190
     }
     else if (Left_Tra_Value < Black_Line && Center_Tra_Value < Black_Line && Right_Tra_Value >= Black_Line)
     {
-        Motor(Clockwise, 250);
+        Motor(Clockwise, 250);//190
     }
     else if (Left_Tra_Value < Black_Line && Center_Tra_Value >= Black_Line && Right_Tra_Value >= Black_Line)
     {
-        Motor(Clockwise, 220);
+        Motor(Clockwise, 230);//165
     }
     else if (Left_Tra_Value >= Black_Line && Center_Tra_Value >= Black_Line && Right_Tra_Value >= Black_Line)
     {
-        Motor(Stop, 0); 
-        int BeepTime = 1;
-        unsigned long currentMillis = millis();
-
-        if (currentMillis <= 2000)
-        {
-            Motor(Stop, 0); 
-        }
-
-        if (currentMillis <= 500)
-        {
-            ControlBeep(BeepTime);
-        }
-
-        if (currentMillis <= 2000)
-        {
-            ContrarotateServo();
-        }
-
-        return 2;
+        Motor(Stop, 0);
+        judge = 0;
     }
+  }
+  
+  int BeepTime = 10;
+  BeepModel(BeepTime); 
 }
 
 char ContrarotateServo()//伺服电机逆时针旋转90°
@@ -167,11 +159,43 @@ char ContrarotateServo()//伺服电机逆时针旋转90°
     delay(10);
 }
 
-char Counterclockwise_spin_motion()      // 逆时针旋转
+int Counterclockwise_spin_motion()      // 逆时针旋转
 {
+  unsigned long startTime = millis();
+  unsigned long elapsedTime = 0;
+  while (elapsedTime < 525) 
+  {
     Motor(Contrarotate, 250);
+    elapsedTime = millis()-startTime;
+    Serial.println(elapsedTime);
+  }
+  Motor(Stop, 0);
+
+  return 4;
 }
 
+int BeepModel(int BeepTime)
+{
+  unsigned long startTime = millis();
+  unsigned long elapsedTime = 200;
+  
+  digitalWrite(Beep_PIN, HIGH); // 停止鸣叫
+  
+  while (elapsedTime < 200 * BeepTime * 2) {
+    if (elapsedTime % 400 < 200) {
+      digitalWrite(Beep_PIN, LOW);
+    } else {
+      digitalWrite(Beep_PIN, HIGH);
+    }
+    elapsedTime = millis() - startTime;
+  }
+  
+  digitalWrite(Beep_PIN, HIGH); // 停止鸣叫
+
+  delay(2000);
+
+  return 3;
+}
 void Motor(int Dir, int Speed)      // motor drive
 {
     digitalWrite(EN_PIN, LOW);
@@ -181,16 +205,6 @@ void Motor(int Dir, int Speed)      // motor drive
     digitalWrite(STCP_PIN, LOW);
     shiftOut(DATA_PIN, SHCP_PIN, MSBFIRST, Dir);
     digitalWrite(STCP_PIN, HIGH);
-}
-
-void ControlBeep(int BeepTime)
-{
-    for (int i = 0; i < BeepTime; i++)
-    {
-      digitalWrite(Beep_PIN, LOW);
-      delay(500); //持续报警0.5秒
-      digitalWrite(Beep_PIN, HIGH);
-    }
 }
 
 float SR04(int Trig, int Echo)      // ultrasonic measured distance
